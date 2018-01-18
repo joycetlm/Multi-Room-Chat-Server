@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <style>
+    #chatroom{ display:none }
+    #kick_ban{ display:none }
+   </style>
+   <title>Chat Room</title>
+	<link rel="stylesheet" href="//code.jquery.com/ui/1.11.4/themes/smoothness/jquery-ui.css">
+	<script src="/socket.io/socket.io.js"></script>
+  	<script src="http://ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js" type="text/javascript"> </script>
+   <script type ="text/javascript">
+     
+      var socketio = io.connect();
+      var cur_room = "";
+      var msg_room = "";
+      var nickname = "";
+      
+      //recieve info from "message_to_client"
+      socketio.on("message_to_client",function(data) {
+            console.log(data['roomname']);
+            if(data['roomname'] == cur_room){ 
+                  if(data['msg_toname']==""){
+                           document.getElementById("chatlog").appendChild(document.createElement("br"));
+                           var color = data['color'];
+                           var msgcolor = document.createElement("span");
+                           var publicmessage = data['nickname']+" : "+data['message'];
+                           if(color == "blue"){
+                                 msgcolor.setAttribute("style","color:blue");
+                           }
+                           else if ( color =="green"){
+                                 msgcolor.setAttribute("style","color:green");
+                           }
+                           else if ( color =="orange"){
+                                 msgcolor.setAttribute("style","color:orange");
+                           }                
+                           msgcolor.innerHTML=publicmessage;
+                           document.getElementById("chatlog").appendChild(msgcolor);  
+                  }
+                  else{
+                           if(data['msg_toname']==nickname){
+                                 var privatemessage =data['nickname']+" send a private message to you: "+data['message'];
+                                 document.getElementById("chatlog").appendChild(document.createElement("br"));
+                                 var color = document.createElement("span");
+                                 color.setAttribute("style","color:red");
+                                 color.innerHTML=privatemessage;
+                                 document.getElementById("chatlog").appendChild(color);        
+                           }
+                           if(data['nickname']==nickname){
+                                 var privatemessage ="You send a private message to "+data['msg_toname']+": "+data['message'];
+                                 document.getElementById("chatlog").appendChild(document.createElement("br"));
+                                 var color = document.createElement("span");
+                                 color.setAttribute("style","color:red");
+                                 color.innerHTML=privatemessage;
+                                 document.getElementById("chatlog").appendChild(color);                        
+                           }
+                  }
+            }
+      });
+      
+ //recieve info from "newroomresponse"     
+      socketio.on("newroomresponse", function(data){
+      alert(data.message);
+      });
+  
+//recieve info from "enterroomresponse"   
+      socketio.on("enterroomresponse", function(data){    
+            console.log(data.success);
+            if(data.success){
+                  chatroompage(); 
+                  console.log(data.creator);
+                  console.log(nickname);
+                  if(data.creator == nickname){
+                        document.getElementById("kick_ban").style.display = 'inline';
+                  }
+                  document.getElementById("title").innerHTML = "<center><h1> Chat room : "+data.roomname+" </h1><p>current nickname: "+data.currentname+"</p></center>";
+            }
+            else{      
+                  alert(data.message);
+            }
+      });  
+    
+ //recieve info from "kickresponse"      
+      socketio.on("kickresponse", function(data){      
+             //console.log(data.message_to_kickname);
+             //console.log(data.message_to_creator);
+            if(data.creator === nickname){
+                  alert(data.message_to_creator);
+            }
+            if(data.kickname === nickname){
+                  alert(data.message_to_kickname);
+                  lobbypage();
+            }
+      });   
+
+//recieve info from "banresponse"   
+      socketio.on("banresponse", function(data){
+        // alert(data.message);
+       //console.log(data.kickname);
+            if(data.banname === nickname){
+                  alert(data.message_to_banname);
+                  lobbypage();
+            }
+      });  
+    
+//recieve info from "message_to_client_lobby"   
+      socketio.on("message_to_client_lobby",function(data) {
+            console.log(data);
+          //Append an HR thematic break and the escaped HTML of the new message
+            document.getElementById("chatlog_lobby").appendChild(document.createElement("hr"));
+            document.getElementById("chatlog_lobby").appendChild(document.createTextNode(data['message']));
+      });
+		
+//send chat room message  
+      function sendMessage(){
+            var msg = document.getElementById("message_input").value;
+            var color = document.getElementById("color").value;
+            socketio.emit("message_to_server", {message:msg,msg_room:msg_room,nickname:nickname,msg_toname:msg_toname,color:color});
+      }
+		
+//send lobby message
+      function sendMessage_lobby(){
+            if ( document.getElementById("nickname").value==''){
+                  alert("You have to enter your nickname!");
+                  return;
+            }
+            var msg = document.getElementById("message_input_lobby").value;
+            var nickname = document.getElementById("nickname").value;
+            socketio.emit("message_to_server_lobby", {"message":msg, "nickname":nickname});
+      }
+      
+//go to chatroom page
+      function chatroompage(){
+            document.getElementById("lobby").style.display = 'none';
+            document.getElementById("chatroom").style.display = 'inline';
+      }  
+
+//back to lobby page
+      function lobbypage(){   
+            document.getElementById("chatroom").style.display = 'none';
+            document.getElementById("lobby").style.display = 'inline';
+            document.getElementById("kick_ban").style.display = 'none';
+            $("#title").empty();
+            socketio.emit("userlist_update",{nickname:nickname, roomname:cur_room});
+       }
+
+// create a new room
+      function createroom(){
+            var creator = document.getElementById("nickname2").value;
+            var roomname = document.getElementById("roomname2").value;
+            var choice_radio_pointers = document.getElementsByName("choice");
+            var type = null;
+            var password = null;
+            if ( document.getElementById("nickname2").value==''){
+                  alert("You have to enter your nickname!");
+            }
+            else{
+                  for(var i=0; i<2; i++){
+                        if(choice_radio_pointers[i].checked){
+                              type = choice_radio_pointers[i].value;
+                              break;
+                        }            
+                  }
+                  if (type == "public"){
+                  }
+                  else {
+                        password = document.getElementById("password2").value;
+                  }         
+                  var newroom = {"creator": creator, "roomname": roomname, "type": type, "password": password, "nickname" : creator};
+                  socketio.emit("newroom", newroom);
+            }         
+      }
+      
+//enter a room
+      function enterroom(){
+            if ( document.getElementById("nickname1").value==''){
+                  alert("You have to enter your nickname!");
+                  return;
+            }
+            else{
+                  nickname = document.getElementById("nickname1").value;
+                  var roomname = document.getElementById("roomname1").value;
+                  var password = document.getElementById("password1").value;
+   		         cur_room = roomname;
+   		         msg_room = roomname;
+                  socketio.emit("checkroom", {"roomname": roomname, "password" : password, "nickname": nickname});
+            }
+
+      }
+
+//show room list
+      socketio.on("roomlist", function(data){  
+            console.log(data);
+            document.getElementById("roomlist").innerHTML = "Current existing room list: ";
+            var list = data;
+            for (var i = 0; i < list.length; i++) {
+                  var roomname = list[i];
+                  document.getElementById("roomlist").innerHTML += roomname;
+                  document.getElementById("roomlist").innerHTML += "   ";
+            }      
+      });
+    
+//show user list
+      socketio.on("userlist", function(data){  
+            console.log(data);
+            document.getElementById("userlist").innerHTML = "Current user list: ";
+            for (var i = 0; i < data.length; i++) {
+                  var username = data[i];
+                  document.getElementById("userlist").innerHTML += username;
+                  document.getElementById("userlist").innerHTML += "   ";
+            }      
+      });
+    
+//show user's profile
+      socketio.on("showmessage",function(data){
+            var profile = 'Room History:\n';
+            for(i=0;i<data.roomhistory.length;i++){
+                  profile += '\t' + data.roomhistory[i] + '\n'; 
+            }
+            profile += 'Message History:\n';
+            if (data.message.length == 0){
+                  profile += " no history message!";
+            }
+            for(i=0;i<data.message.length;i++){
+                  profile += '\t' + data.message[i] + '\n'; 
+            }
+            alert(profile);
+      });
+    
+//send private message
+      function sendprivatemsg(){
+            var msg = document.getElementById("privatemsg_input").value;
+            var msg_toname = document.getElementById("msg_toname").value;
+            socketio.emit("privatemsg_to_server", {message:msg,msg_room:msg_room,nickname:nickname,msg_toname:msg_toname});
+      }
+    
+//kick someone in the chat room
+      function kick(){
+            var kickname = document.getElementById("kbname").value;
+            socketio.emit("kick", {roomname:cur_room,kickname:kickname});        
+      }
+		
+//ban someone in the chat room 
+      function ban(){
+            var banname = document.getElementById("kbname").value;
+            socketio.emit("ban", {roomname:cur_room,banname:banname});
+      }  
+
+//send user message to "userinfo"
+      function userinfo(){
+            socketio.emit("userinfo", {nickname: nickname});
+      }  
+   </script>
+</head>
+
+<body>
+   <div id="lobby" >
+      
+      <div id = "roomlist" > </div>
+      <div style="float:left;position:absolute;left:20px;top:10px;">
+         <div id = "join" >
+            <h3> Join an existing chat room </h3>
+            <input type="text" id="nickname1" placeholder="Enter your nickname" style="width:300px" /><br><br>
+            <input type="text" id="roomname1" placeholder="Enter the name of the chat room you want to enter" style="width:300px" /><br><br>
+            <input type="text" id="password1" placeholder="Password is needed when entering a private room" style="width:300px" /><br><br>
+            <input type="button" id="chatnow" value="Enter a chat room"/>
+         </div>
+       
+         <div id = "create" >
+            <h3> Create a new chat room </h3>
+            <input type="text" id="nickname2" placeholder="Enter your nickname" style="width:300px" /><br><br>
+            <input type="text" id="roomname2" placeholder="Enter the name of the chat room you want to create" style="width:300px" /><br><br>
+            <input type="radio" name="choice" value="public" checked/> Public 
+	         <input type="radio" name="choice" value="private" /> Private <br><br>
+	         <input type="text" id="password2" placeholder="Password is needed when creating a private room" style="width:300px" /><br><br>
+	         <input type="button" id = "creatchatroom" value="Create a chat room" /><br> 
+	      </div>
+	   </div>
+	   <div id="chatlobby" style="width=50%;float:right;position:absolute;left:50%;top:10px;">
+         <h1> ChatRoom Lobby </h1>
+         <input type="text" id="nickname" placeholder="Enter your nickname" style="width:300px" /><br><br>
+         <input type="text" id="message_input_lobby" style="width=200px;height=200px;"/>
+         <input type="button" id="send_lobby" value="Send"/><br>
+         <div id="chatlog_lobby" style="border:1px solid ;" >Message Board :</div>   
+      </div>
+   </div>
+     
+      
+   <div id="chatroom">
+      <div id = "title"> </div>
+      <div id = "userlist" > </div>
+      <input type="button" id="backlobby" value="Back to lobby"/>
+      <input type="button" id = "user_info" value="user info" />
+      <br>
+      <div id = "kick_ban">
+         <h3>Kick Or Ban Someone In This Room</h3>
+         <label>Name: </label><input type="text" id="kbname" placeholder="Enter the username you want to kick or ban" style="width:250px"/>
+         <input type="button" id="kick" value="Kick"/>
+         <input type="button" id="ban" value="Ban"/><br><br>
+      </div>
+      <div id="public" style="width=50%;float:left;position:absolute;left:10px;top:250px;">
+         <h2>Public Message</h2>
+         <input type="text" id="message_input" placeholder="Type message here" style="width:200px"/>
+         <label> message color  </label>
+         <select id="color">
+               <option value = "black"> black </option>
+               <option value = "green"> green </option>
+               <option value = "blue"> blue </option>
+               <option value = "orange"> orange </option>
+         </select>
+         <input type="button" id="send" value="Send"/><br>
+      </div>
+      <div id="private" style="width=50%;float:right;position:absolute;left:500px;top:250px;">
+         <h2>Private Message</h2>
+         <label>Name: </label><input type="text" id="msg_toname" placeholder="Enter the receiver's name" style="width:150px"/>
+         <label>Message Content: </label><input type="text" id="privatemsg_input" placeholder="Type message here"/>
+         <input type="button" id="send_private" value="Send Private Message"/>
+      </div><br />
+      <div id="chatlog" style="position:absolute;top:350px;"></div>   
+   </div>
+      
+   <script>
+    document.getElementById('chatnow').addEventListener("click", enterroom,false);
+    document.getElementById('creatchatroom').addEventListener("click",createroom,false);
+    document.getElementById('send').addEventListener("click", sendMessage,false);
+    document.getElementById('send_lobby').addEventListener("click", sendMessage_lobby,false);
+    document.getElementById('kick').addEventListener("click",kick ,false);
+    document.getElementById('ban').addEventListener("click",ban ,false);
+    document.getElementById('backlobby').addEventListener("click",lobbypage ,false);
+    document.getElementById('send_private').addEventListener("click",sendprivatemsg ,false);
+    document.getElementById('user_info').addEventListener("click", userinfo ,false);
+	</script> 
+	
+</body>    
+</html>
